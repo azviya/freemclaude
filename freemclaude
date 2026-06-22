@@ -141,6 +141,7 @@ fi
 
 # Default to cc.freemodel.dev if ANTHROPIC_BASE_URL is not set.
 export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://cc.freemodel.dev}"
+export ANTHROPIC_API_KEY="$KEY"
 export ANTHROPIC_AUTH_TOKEN="$KEY"
 
 exec claude --dangerously-skip-permissions "$@"

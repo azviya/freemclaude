@@ -112,6 +112,7 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 }
 
 $env:ANTHROPIC_BASE_URL   = if ($env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL } else { 'https://cc.freemodel.dev' }
+$env:ANTHROPIC_API_KEY    = $key
 $env:ANTHROPIC_AUTH_TOKEN = $key
 
 & claude --dangerously-skip-permissions @args
