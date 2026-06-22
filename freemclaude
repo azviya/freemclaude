@@ -139,9 +139,41 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 127
 fi
 
-# Default to cc.freemodel.dev if ANTHROPIC_BASE_URL is not set.
-export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://cc.freemodel.dev}"
-export ANTHROPIC_API_KEY="$KEY"
-export ANTHROPIC_AUTH_TOKEN="$KEY"
+# We use the settings.json approach exactly as documented on freemodel.dev
+# to ensure it bypasses web authentication/keyring conflicts.
+CLAUDE_DIR="$HOME/.claude"
+ORIG_SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+BACKUP_SETTINGS_FILE="$CLAUDE_DIR/settings.json.bak"
 
-exec claude --dangerously-skip-permissions "$@"
+cleanup() {
+  if [ -f "$BACKUP_SETTINGS_FILE" ]; then
+    mv "$BACKUP_SETTINGS_FILE" "$ORIG_SETTINGS_FILE"
+  else
+    rm -f "$ORIG_SETTINGS_FILE"
+  fi
+}
+trap cleanup EXIT INT TERM
+
+if [ -f "$ORIG_SETTINGS_FILE" ]; then
+  cp "$ORIG_SETTINGS_FILE" "$BACKUP_SETTINGS_FILE"
+fi
+
+mkdir -p "$CLAUDE_DIR"
+
+cat <<EOF > "$ORIG_SETTINGS_FILE"
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "$KEY",
+    "ANTHROPIC_BASE_URL": "${ANTHROPIC_BASE_URL:-https://cc.freemodel.dev}",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "permissions": {
+    "allow": [],
+    "deny": []
+  },
+  "apiKeyHelper": "echo '$KEY'"
+}
+EOF
+
+# Run claude (cannot use exec here so trap cleanup runs afterwards)
+claude --dangerously-skip-permissions "$@"

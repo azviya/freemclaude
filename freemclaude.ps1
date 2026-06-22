@@ -111,9 +111,45 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
   exit 127
 }
 
-$env:ANTHROPIC_BASE_URL   = if ($env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL } else { 'https://cc.freemodel.dev' }
-$env:ANTHROPIC_API_KEY    = $key
-$env:ANTHROPIC_AUTH_TOKEN = $key
+# We use the settings.json approach exactly as documented on freemodel.dev
+# to ensure it bypasses web authentication/keyring conflicts.
+$ClaudeDir = Join-Path $env:USERPROFILE '.claude'
+$SettingsFile = Join-Path $ClaudeDir 'settings.json'
+$BackupFile = Join-Path $ClaudeDir 'settings.json.bak'
 
-& claude --dangerously-skip-permissions @args
+if (Test-Path $SettingsFile) {
+  Copy-Item $SettingsFile $BackupFile -Force
+} else {
+  New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
+}
+
+$baseUrl = if ($env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL } else { 'https://cc.freemodel.dev' }
+
+$fmSettings = @"
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "$key",
+    "ANTHROPIC_BASE_URL": "$baseUrl",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "permissions": {
+    "allow": [],
+    "deny": []
+  },
+  "apiKeyHelper": "echo '$key'"
+}
+"@
+
+try {
+  Set-Content -Path $SettingsFile -Value $fmSettings -Encoding UTF8
+  & claude --dangerously-skip-permissions @args
+} finally {
+  if (Test-Path $BackupFile) {
+    Move-Item $BackupFile $SettingsFile -Force
+  } else {
+    if (Test-Path $SettingsFile) {
+      Remove-Item $SettingsFile -Force
+    }
+  }
+}
 exit $LASTEXITCODE
