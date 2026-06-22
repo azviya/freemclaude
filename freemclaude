@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+#
+# freemclaude — run Claude Code against FreeModel.dev's Anthropic-compatible API.
+#
+# Key resolution order:
+#   1. `freemclaude config [KEY]`     — set/replace the stored key (inline or prompt)
+#   2. stored config file             — set on a previous run
+#   3. FREEMODEL_API_KEY env var      — used and saved for next time
+#   4. interactive prompt             — asks for the key if you haven't included it yet
+#
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/freemclaude"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+say() { printf '%s\n' "$*" >&2; }
+
+# Trim leading/trailing whitespace.
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
+
+# Persist the key with owner-only permissions.
+save_key() {
+  local key
+  key="$(trim "$1")"
+  if [ -z "$key" ]; then
+    say "Refusing to save an empty key."
+    return 1
+  fi
+  mkdir -p "$CONFIG_DIR"
+  ( umask 077; printf 'FREEMODEL_API_KEY=%s\n' "$key" > "$CONFIG_FILE" )
+  chmod 600 "$CONFIG_FILE"
+  say "Key saved to $CONFIG_FILE"
+}
+
+read_key() {
+  [ -f "$CONFIG_FILE" ] || return 0
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      FREEMODEL_API_KEY=*) printf '%s' "${line#FREEMODEL_API_KEY=}"; return 0 ;;
+    esac
+  done < "$CONFIG_FILE"
+  return 0
+}
+
+# Read a secret from the terminal; fall back to stdin if /dev/tty is unusable.
+read_secret() {
+  local prompt="$1" value=""
+  printf '%s' "$prompt" >&2
+  if IFS= read -rs value 2>/dev/null < /dev/tty; then
+    :
+  else
+    IFS= read -rs value || true
+  fi
+  printf '\n' >&2
+  printf '%s' "$value"
+}
+
+# Interactive first-time setup.
+interactive_setup() {
+  say ""
+  say "┌──────────────────────────────────────────┐"
+  say "│  freemclaude · first-time setup          │"
+  say "└──────────────────────────────────────────┘"
+  say ""
+  say "Claude Code will run against FreeModel's API."
+  say "You only need to enter your key once."
+  say "Get a key: https://freemodel.dev/dashboard"
+  say ""
+  local key="" tries=0
+  while :; do
+    key="$(trim "$(read_secret 'FreeModel API key: ')")"
+    [ -n "$key" ] && break
+    tries=$((tries + 1))
+    say "Key can't be empty."
+    if [ "$tries" -ge 3 ]; then
+      say "Aborting after 3 empty attempts."
+      exit 1
+    fi
+  done
+  save_key "$key"
+  say ""
+}
+
+# --- subcommands -----------------------------------------------------------
+case "${1:-}" in
+  config|--config|set-key|--set-key|change|--change|change-key|--change-key)
+    if [ "${2:-}" != "" ]; then
+      save_key "$2"
+    else
+      interactive_setup
+    fi
+    say "Done. Run 'freemclaude' to start."
+    exit 0
+    ;;
+  reset|--reset)
+    rm -f "$CONFIG_FILE"
+    say "Stored key removed."
+    exit 0
+    ;;
+  update|--update|upgrade|--upgrade)
+    say "Updating freemclaude to the latest version..."
+    # We point to the local file/repo when running locally or they can run a custom updater
+    say "Please pull updates from your git repository or re-run the installer."
+    exit 0
+    ;;
+esac
+
+# --- resolve the key -------------------------------------------------------
+KEY="$(read_key)"
+
+# Not stored yet: take it from the environment if it's there...
+if [ -z "${KEY:-}" ] && [ -n "${FREEMODEL_API_KEY:-}" ]; then
+  KEY="$(trim "$FREEMODEL_API_KEY")"
+  say "Using FREEMODEL_API_KEY from environment; saving for next time."
+  save_key "$KEY" || true
+fi
+
+# ...otherwise ask for it interactively.
+if [ -z "${KEY:-}" ]; then
+  interactive_setup
+  KEY="$(read_key)"
+fi
+
+if [ -z "${KEY:-}" ]; then
+  say "No API key available. Run 'freemclaude config' to set one."
+  exit 1
+fi
+
+# --- launch ----------------------------------------------------------------
+if ! command -v claude >/dev/null 2>&1; then
+  say "claude CLI not found on PATH."
+  say "Install Claude Code first: https://docs.claude.com/en/docs/claude-code"
+  exit 127
+fi
+
+# Default to cc.freemodel.dev if ANTHROPIC_BASE_URL is not set.
+export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://cc.freemodel.dev}"
+export ANTHROPIC_AUTH_TOKEN="$KEY"
+
+exec claude --dangerously-skip-permissions "$@"
