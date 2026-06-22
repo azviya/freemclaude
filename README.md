@@ -11,7 +11,7 @@ Install once with a single command, enter your FreeModel API key once (it asks y
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/freemclaude/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/azviya/freemclaude/main/install.sh | bash
 ```
 
 Installs a single `freemclaude` script into `~/.local/bin`. If that directory isn't on your `PATH`, the installer prints the line to add.
@@ -19,7 +19,7 @@ Installs a single `freemclaude` script into `~/.local/bin`. If that directory is
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/freemclaude/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/azviya/freemclaude/main/install.ps1 | iex
 ```
 
 Installs `freemclaude` into `%LOCALAPPDATA%\Programs\freemclaude` and adds it to your user `PATH`. Open a **new** terminal afterward.

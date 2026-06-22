@@ -2,12 +2,11 @@
 #
 # freemclaude installer.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/freemclaude/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/azviya/freemclaude/main/install.sh | bash
 #
 set -euo pipefail
 
-# TODO: Replace <YOUR_GITHUB_USERNAME> with your actual GitHub username once you push this repository.
-GITHUB_USERNAME="<YOUR_GITHUB_USERNAME>"
+GITHUB_USERNAME="azviya"
 REPO_RAW="https://raw.githubusercontent.com/$GITHUB_USERNAME/freemclaude/main"
 CMD_NAME="freemclaude"
 BIN_DIR="${FREEMCLAUDE_BIN_DIR:-$HOME/.local/bin}"

@@ -1,11 +1,10 @@
 # freemclaude installer for Windows (PowerShell).
 # Usage:
-#   irm https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/freemclaude/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/azviya/freemclaude/main/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
 
-# TODO: Replace <YOUR_GITHUB_USERNAME> with your actual GitHub username once you push this repository.
-$GithubUsername = '<YOUR_GITHUB_USERNAME>'
+$GithubUsername = 'azviya'
 $Repo = "https://raw.githubusercontent.com/$GithubUsername/freemclaude/main"
 $Dest = Join-Path $env:LOCALAPPDATA 'Programs\freemclaude'
 
