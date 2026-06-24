@@ -150,8 +150,8 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 }
 
 $env:ANTHROPIC_BASE_URL                 = 'https://cc.freemodel.dev'
-$env:ANTHROPIC_API_KEY                  = $key
 $env:ANTHROPIC_AUTH_TOKEN               = $key
+if (Test-Path env:\ANTHROPIC_API_KEY) { Remove-Item env:\ANTHROPIC_API_KEY }
 $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
 
 & claude --dangerously-skip-permissions @args

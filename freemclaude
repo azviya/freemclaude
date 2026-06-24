@@ -170,8 +170,8 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 
 export ANTHROPIC_BASE_URL="https://cc.freemodel.dev"
-export ANTHROPIC_API_KEY="$KEY"
 export ANTHROPIC_AUTH_TOKEN="$KEY"
+unset ANTHROPIC_API_KEY
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
 
 exec claude --dangerously-skip-permissions "$@"
