@@ -87,6 +87,33 @@ interactive_setup() {
   say ""
 }
 
+reset_claude_settings() {
+  local settings_file="$HOME/.claude/settings.json"
+  if [ -f "$settings_file" ]; then
+    python -c '
+import json, os
+path = os.path.expanduser("~/.claude/settings.json")
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        modified = False
+        if "env" in data:
+            del data["env"]
+            modified = True
+        if "apiKeyHelper" in data:
+            del data["apiKeyHelper"]
+            modified = True
+        if modified:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            print("Removed FreeModel settings.json overrides.")
+    except:
+        pass
+' 2>/dev/null || true
+  fi
+}
+
 # --- subcommands -----------------------------------------------------------
 case "${1:-}" in
   config|--config|set-key|--set-key|change|--change|change-key|--change-key|login|--login)
@@ -100,6 +127,7 @@ case "${1:-}" in
     ;;
   reset|--reset|logout|--logout)
     rm -f "$CONFIG_FILE"
+    reset_claude_settings
     say "Stored key removed (logged out)."
     exit 0
     ;;
@@ -149,6 +177,7 @@ if [ -z "${KEY:-}" ]; then
 fi
 
 # --- check if key is valid --------------------------------------------------
+reset_claude_settings
 if ! test_api_key "$KEY"; then
   say ""
   say "WARNING: Your stored FreeModel API key is invalid, expired, or unauthorized."

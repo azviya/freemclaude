@@ -64,6 +64,31 @@ function Invoke-Setup {
   exit 1
 }
 
+function Reset-ClaudeSettings {
+  $settingsPath = Join-Path $env:USERPROFILE '.claude\settings.json'
+  if (Test-Path $settingsPath) {
+    try {
+      $content = Get-Content $settingsPath -Raw
+      if ($content) {
+        $json = $content | ConvertFrom-Json
+        $modified = $false
+        if ($json -and $json.psobject.Properties['env']) {
+          $json.psobject.Properties.Remove('env')
+          $modified = $true
+        }
+        if ($json -and $json.psobject.Properties['apiKeyHelper']) {
+          $json.psobject.Properties.Remove('apiKeyHelper')
+          $modified = $true
+        }
+        if ($modified) {
+          $json | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
+          Write-Host "Removed FreeModel settings.json overrides."
+        }
+      }
+    } catch {}
+  }
+}
+
 # --- subcommands -----------------------------------------------------------
 if ($args.Count -ge 1) {
   switch -Regex ($args[0]) {
@@ -74,6 +99,7 @@ if ($args.Count -ge 1) {
     }
     '^(reset|--reset|logout|--logout)$' {
       if (Test-Path $ConfigFile) { Remove-Item $ConfigFile -Force }
+      Reset-ClaudeSettings
       Write-Host 'Stored key removed (logged out).'
       exit 0
     }
@@ -129,6 +155,7 @@ if (-not $key) {
 }
 
 # --- check if key is valid --------------------------------------------------
+Reset-ClaudeSettings
 if (-not (Test-ApiKey $key)) {
   Write-Host ''
   Write-Warning 'Stored FreeModel API key is invalid, expired, or unauthorized.'
