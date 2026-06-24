@@ -67,14 +67,14 @@ function Invoke-Setup {
 # --- subcommands -----------------------------------------------------------
 if ($args.Count -ge 1) {
   switch -Regex ($args[0]) {
-    '^(config|--config|set-key|--set-key|change|--change|change-key|--change-key)$' {
+    '^(config|--config|set-key|--set-key|change|--change|change-key|--change-key|login|--login)$' {
       if ($args.Count -ge 2) { Save-Key $args[1] } else { Invoke-Setup }
       Write-Host "Done. Run 'freemclaude' to start."
       exit 0
     }
-    '^(reset|--reset)$' {
+    '^(reset|--reset|logout|--logout)$' {
       if (Test-Path $ConfigFile) { Remove-Item $ConfigFile -Force }
-      Write-Host 'Stored key removed.'
+      Write-Host 'Stored key removed (logged out).'
       exit 0
     }
     '^(update|--update|upgrade|--upgrade)$' {
@@ -82,6 +82,30 @@ if ($args.Count -ge 1) {
       Write-Host 'Please pull updates from your git repository or re-run the installer.'
       exit 0
     }
+  }
+}
+
+function Test-ApiKey([string]$Key) {
+  $body = @{
+    model = "gpt-5.5"
+    messages = @(
+      @{ role = "user"; content = "ping" }
+    )
+    max_tokens = 1
+  } | ConvertTo-Json
+  
+  try {
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+    $response = Invoke-WebRequest -Uri 'https://api.freemodel.dev/v1/chat/completions' -Method Post -Headers @{'Authorization'="Bearer $Key"} -Body $body -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop | Out-Null
+    return $true
+  } catch {
+    if ($_.Exception -and $_.Exception.Response) {
+      $statusCode = [int]$_.Exception.Response.StatusCode
+      if ($statusCode -eq 401 -or $statusCode -eq 403) {
+        return $false
+      }
+    }
+    return $true
   }
 }
 
@@ -104,6 +128,20 @@ if (-not $key) {
   exit 1
 }
 
+# --- check if key is valid --------------------------------------------------
+if (-not (Test-ApiKey $key)) {
+  Write-Host ''
+  Write-Warning 'Stored FreeModel API key is invalid, expired, or unauthorized.'
+  $choice = Read-Host 'Would you like to enter a new FreeModel API key? (Y/N)'
+  if ($choice -and $choice.Trim().ToUpper() -eq 'Y') {
+    Invoke-Setup
+    $key = Get-Key
+  } else {
+    Write-Host 'Aborting launch.'
+    exit 1
+  }
+}
+
 # --- launch ----------------------------------------------------------------
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
   Write-Host 'claude CLI not found on PATH.'
@@ -111,45 +149,10 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
   exit 127
 }
 
-# We use the settings.json approach exactly as documented on freemodel.dev
-# to ensure it bypasses web authentication/keyring conflicts.
-$ClaudeDir = Join-Path $env:USERPROFILE '.claude'
-$SettingsFile = Join-Path $ClaudeDir 'settings.json'
-$BackupFile = Join-Path $ClaudeDir 'settings.json.bak'
+$env:ANTHROPIC_BASE_URL                 = 'https://cc.freemodel.dev'
+$env:ANTHROPIC_API_KEY                  = $key
+$env:ANTHROPIC_AUTH_TOKEN               = $key
+$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
 
-if (Test-Path $SettingsFile) {
-  Copy-Item $SettingsFile $BackupFile -Force
-} else {
-  New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
-}
-
-$baseUrl = if ($env:ANTHROPIC_BASE_URL) { $env:ANTHROPIC_BASE_URL } else { 'https://cc.freemodel.dev' }
-
-$fmSettings = @"
-{
-  "env": {
-    "ANTHROPIC_API_KEY": "$key",
-    "ANTHROPIC_BASE_URL": "$baseUrl",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
-  },
-  "permissions": {
-    "allow": [],
-    "deny": []
-  },
-  "apiKeyHelper": "echo '$key'"
-}
-"@
-
-try {
-  Set-Content -Path $SettingsFile -Value $fmSettings -Encoding UTF8
-  & claude --dangerously-skip-permissions @args
-} finally {
-  if (Test-Path $BackupFile) {
-    Move-Item $BackupFile $SettingsFile -Force
-  } else {
-    if (Test-Path $SettingsFile) {
-      Remove-Item $SettingsFile -Force
-    }
-  }
-}
+& claude --dangerously-skip-permissions @args
 exit $LASTEXITCODE

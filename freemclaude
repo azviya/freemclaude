@@ -89,7 +89,7 @@ interactive_setup() {
 
 # --- subcommands -----------------------------------------------------------
 case "${1:-}" in
-  config|--config|set-key|--set-key|change|--change|change-key|--change-key)
+  config|--config|set-key|--set-key|change|--change|change-key|--change-key|login|--login)
     if [ "${2:-}" != "" ]; then
       save_key "$2"
     else
@@ -98,18 +98,34 @@ case "${1:-}" in
     say "Done. Run 'freemclaude' to start."
     exit 0
     ;;
-  reset|--reset)
+  reset|--reset|logout|--logout)
     rm -f "$CONFIG_FILE"
-    say "Stored key removed."
+    say "Stored key removed (logged out)."
     exit 0
     ;;
   update|--update|upgrade|--upgrade)
     say "Updating freemclaude to the latest version..."
-    # We point to the local file/repo when running locally or they can run a custom updater
     say "Please pull updates from your git repository or re-run the installer."
     exit 0
     ;;
 esac
+
+test_api_key() {
+  local key="$1"
+  local status_code
+  # Send a lightweight check using curl
+  status_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -X POST "https://api.freemodel.dev/v1/chat/completions" \
+    -H "Authorization: Bearer $key" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"gpt-5.5", "messages":[{"role":"user", "content":"ping"}], "max_tokens":1}' \
+    --max-time 5 || echo "000")
+  
+  if [ "$status_code" = "401" ] || [ "$status_code" = "403" ]; then
+    return 1 # Invalid
+  fi
+  return 0 # Valid (or other network error, we don't block)
+}
 
 # --- resolve the key -------------------------------------------------------
 KEY="$(read_key)"
@@ -132,6 +148,20 @@ if [ -z "${KEY:-}" ]; then
   exit 1
 fi
 
+# --- check if key is valid --------------------------------------------------
+if ! test_api_key "$KEY"; then
+  say ""
+  say "WARNING: Your stored FreeModel API key is invalid, expired, or unauthorized."
+  read -p "Would you like to enter a new FreeModel API key? (y/n): " choice
+  if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+    interactive_setup
+    KEY="$(read_key)"
+  else
+    say "Aborting launch."
+    exit 1
+  fi
+fi
+
 # --- launch ----------------------------------------------------------------
 if ! command -v claude >/dev/null 2>&1; then
   say "claude CLI not found on PATH."
@@ -139,41 +169,9 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 127
 fi
 
-# We use the settings.json approach exactly as documented on freemodel.dev
-# to ensure it bypasses web authentication/keyring conflicts.
-CLAUDE_DIR="$HOME/.claude"
-ORIG_SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-BACKUP_SETTINGS_FILE="$CLAUDE_DIR/settings.json.bak"
+export ANTHROPIC_BASE_URL="https://cc.freemodel.dev"
+export ANTHROPIC_API_KEY="$KEY"
+export ANTHROPIC_AUTH_TOKEN="$KEY"
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
 
-cleanup() {
-  if [ -f "$BACKUP_SETTINGS_FILE" ]; then
-    mv "$BACKUP_SETTINGS_FILE" "$ORIG_SETTINGS_FILE"
-  else
-    rm -f "$ORIG_SETTINGS_FILE"
-  fi
-}
-trap cleanup EXIT INT TERM
-
-if [ -f "$ORIG_SETTINGS_FILE" ]; then
-  cp "$ORIG_SETTINGS_FILE" "$BACKUP_SETTINGS_FILE"
-fi
-
-mkdir -p "$CLAUDE_DIR"
-
-cat <<EOF > "$ORIG_SETTINGS_FILE"
-{
-  "env": {
-    "ANTHROPIC_API_KEY": "$KEY",
-    "ANTHROPIC_BASE_URL": "${ANTHROPIC_BASE_URL:-https://cc.freemodel.dev}",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
-  },
-  "permissions": {
-    "allow": [],
-    "deny": []
-  },
-  "apiKeyHelper": "echo '$KEY'"
-}
-EOF
-
-# Run claude (cannot use exec here so trap cleanup runs afterwards)
-claude --dangerously-skip-permissions "$@"
+exec claude --dangerously-skip-permissions "$@"

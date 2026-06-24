@@ -51,14 +51,19 @@ The key is resolved in this order:
 4. Interactive prompt — asked for automatically if none of the above is set.
 
 ## Manage your key
-
+ 
 ```bash
-freemclaude change-key        # change the stored key (interactive prompt)
-freemclaude change-key <KEY>  # change the key without a prompt
-freemclaude reset             # delete the stored key
+freemclaude login             # log in with a new key (interactive prompt)
+freemclaude login <KEY>       # log in and save key without a prompt
+freemclaude logout            # log out and delete the stored key
+freemclaude reset             # same as logout
 ```
+ 
+`config`, `set-key`, `change`, and `change-key` are accepted as aliases for `login`.
 
-`config`, `set-key`, and `change` are accepted as aliases for `change-key`.
+## Automatic Key Verification
+
+If the API key you stored becomes invalid, expired, or runs out of credits, `freemclaude` will automatically detect this before launching Claude Code and ask you if you'd like to update it. This prevents the CLI from getting stuck in endless retry/connection loops.
 
 | Platform        | Where the key is stored                            |
 | --------------- | -------------------------------------------------- |
